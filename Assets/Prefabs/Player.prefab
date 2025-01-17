@@ -138,6 +138,7 @@ MonoBehaviour:
   data: {fileID: 11400000, guid: 16b39aead0129564d8428fa8789258eb, type: 2}
   playerMovement: {fileID: 0}
   playerCombatManager: {fileID: 0}
+  cloneController: {fileID: 0}
   spriteRenderer: {fileID: 3160662883330680155}
 --- !u!114 &883248470348799864
 MonoBehaviour:

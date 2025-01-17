@@ -13,20 +13,20 @@ MonoBehaviour:
   m_Name: PlayerData
   m_EditorClassIdentifier: 
   maxSpeed: 8
-  accelerationTime: 0.3
-  decelerationTime: 0.15
-  turnSpeed: 0.2
+  accelerationTime: 0.15
+  decelerationTime: 0.1
+  turnSpeed: 0.12
   airControlMultiplier: 0.65
-  maxFallSpeed: 20
-  fallGravityMultiplier: 2.2
-  ascendingGravityMultiplier: 0.9
-  jumpForce: 16
-  minJumpMultiplier: 0.4
+  maxFallSpeed: 15
+  fallGravityMultiplier: 2.5
+  ascendingGravityMultiplier: 1.8
+  jumpForce: 13
+  minJumpMultiplier: 0.5
   jumpBufferTime: 0.2
   coyoteTime: 0.15
-  apexGravityMultiplier: 2
+  apexGravityMultiplier: 1.5
   apexThreshold: 2
-  wallJumpForce: 10
+  wallJumpForce: 12
   wallJumpUpForce: 15
   wallJumpControlCooldown: 0.2
   wallSlideSpeed: 3
@@ -57,3 +57,14 @@ MonoBehaviour:
   wallCheckDistance: 0.3
   wallCheckHeight: 1
   wallCheckVerticalOffset: 0
+  attackDuration: 0.25
+  attackCooldown: 0.2
+  attackDamage: 1
+  attackKnockbackForce: 8
+  knockbackDuration: 0.2
+  horizontalHitboxSize: {x: 1.5, y: 1}
+  verticalHitboxSize: {x: 1, y: 1.5}
+  hitboxOffset: 1
+  hitStopDuration: 0.1
+  screenShakeIntensity: 0.1
+  screenShakeDuration: 0.1

@@ -4,14 +4,13 @@ using UnityEngine;
 [RequireComponent (typeof(Rigidbody2D))]
 public class PlayerMovement : MonoBehaviour,IAnimationState
 {
-    [Header("References")]
-    [SerializeField] Rigidbody2D rb;
+    [Header("Referencias")]
+    [SerializeField] private Rigidbody2D rb;
     [SerializeField] public CharacterData data;
-    [SerializeField] AnimatorManager animatorManager;
+    [SerializeField] private AnimatorManager animatorManager;
     private PlayerAnimationState animationState = new PlayerAnimationState();
 
-
-    #region StateFlags
+    #region Estado del Personaje
     private bool isGrounded;
     private bool isJumping;
     private bool isDashing;
@@ -19,7 +18,7 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
     private bool canDoubleJump = true;
     #endregion
 
-    #region Movement Variables
+    #region Variables de Movimiento
     private float currentSpeed;
     private float dashTimeLeft;
     private float dashCooldownLeft;
@@ -30,17 +29,26 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
     private Vector2 movementInput;
     #endregion
 
-    #region Physics Check Variables
+    #region Variables de Comprobación Física
     private ContactFilter2D groundFilter;
     private ContactFilter2D wallFilter;
     private RaycastHit2D[] groundHits = new RaycastHit2D[4];
     private RaycastHit2D[] wallHits = new RaycastHit2D[2];
     #endregion
 
-    //Components cache
     private Transform playerTransform;
 
-    // Implementaci�n de la interfaz IAnimationState
+    #region Implementación de Interfaces
+    // Implementación de IMovementState/IAnimationState
+    bool IMovementState.IsGrounded => isGrounded;
+    bool IMovementState.IsJumping => isJumping;
+    bool IMovementState.IsFalling => rb.linearVelocity.y < -0.1f;
+    bool IMovementState.IsWallSliding => isWallSliding;
+    bool IMovementState.IsDashing => isDashing;
+    float IMovementState.MovementSpeed => Mathf.Abs(rb.linearVelocity.x);
+    Vector2 IMovementState.MovementDirection => movementInput;
+
+    // Propiedades públicas para uso interno
     public bool IsGrounded => isGrounded;
     public bool IsJumping => isJumping;
     public bool IsFalling => rb.linearVelocity.y < -0.1f;
@@ -48,12 +56,14 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
     public bool IsDashing => isDashing;
     public float MovementSpeed => Mathf.Abs(rb.linearVelocity.x);
     public Vector2 MovementDirection => movementInput;
+    #endregion
 
     private void Awake()
     {
         InitializeComponents();
         InitializeCollisionFilters();
     }
+
     private void FixedUpdate()
     {
         UpdatePhysicsState();
@@ -63,43 +73,30 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
             dashCooldownLeft -= Time.fixedDeltaTime;
         }
     }
-    private void UpdateAnimationState()
-    {
-        animationState.IsGrounded = IsGrounded;
-        animationState.IsJumping = IsJumping;
-        animationState.IsFalling = IsFalling;
-        animationState.IsWallSliding = IsWallSliding;
-        animationState.IsDashing = IsDashing;
-        animationState.MovementSpeed = MovementSpeed;
-        animationState.MovementDirection = MovementDirection;
-
-        animatorManager.UpdateAnimationState(animationState);
-    }
 
     private void Update()
     {
         UpdateAnimationState();
     }
 
-    #region Initialization
+    #region Inicialización
     private void InitializeComponents()
     {
         playerTransform = transform;
         if (!rb) rb = GetComponent<Rigidbody2D>();
-        if(!animatorManager) animatorManager = GetComponent<AnimatorManager>();
-
+        if (!animatorManager) animatorManager = GetComponent<AnimatorManager>();
     }
 
     private void InitializeCollisionFilters()
     {
-        //Setup ground filter
+        // Configurar filtro de suelo
         groundFilter = new ContactFilter2D
         {
             useLayerMask = true,
             layerMask = data.groundLayer
         };
 
-        //Set up Wall Filter
+        // Configurar filtro de paredes
         wallFilter = new ContactFilter2D
         {
             useLayerMask = true,
@@ -108,7 +105,7 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
     }
     #endregion
 
-    #region Public Methods
+    #region Manejo de Input
     public void HandleMovement(Vector2 input)
     {
         movementInput = input;
@@ -117,131 +114,131 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
 
     public void HandleJumpInput(bool jumpPressed)
     {
-        if(jumpPressed)
+        if (jumpPressed)
         {
             jumpBufferTimeLeft = data.jumpBufferTime;
             TryJump();
         }
-        else if(rb.linearVelocity.y > 0 && isJumping)
+        else if (rb.linearVelocity.y > 0 && isJumping)
         {
-            //Early jump release for variable height
-            rb.linearVelocity = new Vector2(rb.linearVelocity.x,rb.linearVelocity.y * data.minJumpMultiplier);
+            // Soltar el salto temprano para altura variable
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y * data.minJumpMultiplier);
             isJumping = false;
         }
     }
 
     public void HandleDashInput(bool dashPressed)
     {
-        if(dashPressed && dashCooldownLeft <= 0 && !isDashing)
+        if (dashPressed && dashCooldownLeft <= 0 && !isDashing)
         {
             StartDash();
         }
     }
     #endregion
 
-    #region Movement Methods
+    #region Métodos de Movimiento
     private void ApplyMovement()
     {
-        if(isDashing)
+        // Manejar casos especiales primero
+        if (isDashing)
         {
             HandleDashMovement();
             return;
         }
-        if(wallJumpCoolDownLeft > 0)
+
+        if (wallJumpCoolDownLeft > 0)
         {
             wallJumpCoolDownLeft -= Time.fixedDeltaTime;
             return;
         }
-        // Movimiento horizontal
-        float targetSpeed = movementInput.x * data.maxSpeed;
-        float speedDiff = targetSpeed - rb.linearVelocity.x;
-        float acceleration;
 
-        // Determinar qué aceleración usar
-        if (Mathf.Abs(targetSpeed) < 0.01f)
+        float targetSpeed = movementInput.x * data.maxSpeed;
+        float currentSpeed = rb.linearVelocity.x;
+
+        // Manejo de la desaceleración cuando no hay input
+        if (Mathf.Abs(movementInput.x) < 0.01f)
         {
-            // Desaceleración (frenado)
-            acceleration = data.maxSpeed / data.decelerationTime;
+            // Aplicar desaceleración suave usando interpolación
+            float smoothDeceleration = Mathf.Lerp(
+                currentSpeed,
+                0f,
+                Time.fixedDeltaTime / data.decelerationTime
+            );
+
+            rb.linearVelocity = new Vector2(smoothDeceleration, rb.linearVelocity.y);
+            UpdateGravityScale();
+            return;
         }
-        else if (Mathf.Sign(targetSpeed) != Mathf.Sign(rb.linearVelocity.x))
+
+        // Cálculo de velocidad objetivo usando interpolación suave
+        float newSpeed;
+        if (Mathf.Sign(targetSpeed) != Mathf.Sign(currentSpeed))
         {
-            // Cambio de dirección
-            acceleration = data.maxSpeed / data.turnSpeed;
+            // Cambio de dirección: usar turnSpeed para una transición más suave
+            float turnRate = Time.fixedDeltaTime / data.turnSpeed;
+            newSpeed = Mathf.Lerp(currentSpeed, targetSpeed, turnRate);
         }
         else
         {
-            // Aceleración normal
-            acceleration = data.maxSpeed / data.accelerationTime;
+            // Misma dirección: usar accelerationTime para el movimiento normal
+            float accelerationRate = Time.fixedDeltaTime / data.accelerationTime;
+            newSpeed = Mathf.Lerp(currentSpeed, targetSpeed, accelerationRate);
         }
 
-        // Calcular la fuerza a aplicar
-        float moveForce = Mathf.Abs(speedDiff) * acceleration * rb.mass;
-
-        // Limitar la fuerza máxima
-        moveForce = Mathf.Min(moveForce, data.maxSpeed * 10);
-
-        // Aplicar la dirección
-        moveForce *= Mathf.Sign(speedDiff);
-
-        // Modificador de control aéreo
+        // Aplicar modificador de control aéreo
         if (!isGrounded)
         {
-            moveForce *= data.airControlMultiplier;
+            // Reducir el cambio de velocidad en el aire
+            newSpeed = Mathf.Lerp(currentSpeed, newSpeed, data.airControlMultiplier);
         }
 
-        // Aplicar la fuerza
-        rb.AddForce(Vector2.right * moveForce);
+        // Aplicar la velocidad final
+        rb.linearVelocity = new Vector2(newSpeed, rb.linearVelocity.y);
 
-        // Limitar velocidad horizontal
-        float clampedSpeedX = Mathf.Clamp(rb.linearVelocity.x, -data.maxSpeed, data.maxSpeed);
-        rb.linearVelocity = new Vector2(clampedSpeedX, rb.linearVelocity.y);
-
-
-        //Gestion de gravedad
         UpdateGravityScale();
     }
 
     private void UpdateGravityScale()
     {
-        // Si estamos cayendo
         if (rb.linearVelocity.y < 0)
         {
+            // Caída
             rb.gravityScale = data.fallGravityMultiplier;
         }
-        // Si estamos cerca del pico del salto
         else if (rb.linearVelocity.y > 0 && rb.linearVelocity.y < data.apexThreshold)
         {
+            // Cerca del punto más alto
             rb.gravityScale = data.apexGravityMultiplier;
         }
-        // Si estamos subiendo
         else if (rb.linearVelocity.y > 0)
         {
+            // Subiendo
             rb.gravityScale = data.ascendingGravityMultiplier;
         }
-        // En otros casos
         else
         {
             rb.gravityScale = 1f;
         }
 
-        // Limitar la velocidad de ca�da
+        // Limitar velocidad de caída
         if (rb.linearVelocity.y < -data.maxFallSpeed)
         {
             rb.linearVelocity = new Vector2(rb.linearVelocity.x, -data.maxFallSpeed);
         }
     }
+
     private void TryJump()
     {
-        if(isGrounded || coyoteTimeLeft > 0)
+        if (isGrounded || coyoteTimeLeft > 0)
         {
             PerformJump(data.jumpForce);
             canDoubleJump = true;
         }
-        else if(isWallSliding)
+        else if (isWallSliding)
         {
             PerformWallJump();
         }
-        else if(canDoubleJump)
+        else if (canDoubleJump)
         {
             PerformDoubleJump();
         }
@@ -252,6 +249,7 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
         isJumping = true;
         coyoteTimeLeft = 0;
         rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+        ApplyJumpSquash();
     }
 
     private void PerformWallJump()
@@ -260,7 +258,7 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
         isJumping = true;
         wallJumpCoolDownLeft = data.wallJumpControlCooldown;
 
-        Vector2 wallJumpForce = new Vector2(-wallDirectionX* data.wallJumpForce, data.wallJumpForce);
+        Vector2 wallJumpForce = new Vector2(-wallDirectionX * data.wallJumpForce, data.wallJumpForce);
         rb.linearVelocity = wallJumpForce;
     }
 
@@ -276,12 +274,12 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
         isDashing = true;
         dashTimeLeft = data.dashDuration;
         dashCooldownLeft = data.dashCooldown;
-        
-        //Set dash velocity
-        float dashDirection = movementInput.x != 0 ? Mathf.Sign(movementInput.x) : Mathf.Sign(playerTransform.localScale.x);
+
+        float dashDirection = movementInput.x != 0 ?
+            Mathf.Sign(movementInput.x) :
+            Mathf.Sign(playerTransform.localScale.x);
         rb.linearVelocity = new Vector2(dashDirection * data.dashSpeed, 0);
 
-        // Optional: Apply dash effects
         ApplyDashEffects();
     }
 
@@ -294,6 +292,7 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
             EndDash();
         }
     }
+
     private void EndDash()
     {
         isDashing = false;
@@ -311,7 +310,7 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
     }
     #endregion
 
-    #region Checks
+    #region Comprobaciones de Estado
     private void UpdatePhysicsState()
     {
         UpdateGroundedState();
@@ -319,12 +318,12 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
         HandleCoyoteTime();
         HandleJumpBuffer();
     }
+
     private void UpdateGroundedState()
     {
         Vector2 boxCenter = (Vector2)transform.position + data.groundCheckOffset;
-        Vector2 boxSize = new Vector2(data.groundCheckWidth,data.groundCheckDistance);
+        Vector2 boxSize = new Vector2(data.groundCheckWidth, data.groundCheckDistance);
 
-        //Perform the ground Check
         int hitCount = Physics2D.BoxCast(
             boxCenter,
             boxSize,
@@ -333,28 +332,24 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
             groundFilter,
             groundHits,
             data.groundCheckDistance
-            );
+        );
 
-        //Update Grounded State
         bool wasGrounded = isGrounded;
         isGrounded = hitCount > 0;
 
-        //Start CoyoteTime when leaving ground
-        if(wasGrounded && !isGrounded)
+        if (wasGrounded && !isGrounded)
         {
             coyoteTimeLeft = data.coyoteTime;
         }
 
-        //Reset doubleJump when touching ground
-        if(isGrounded)
+        if (isGrounded)
         {
             canDoubleJump = true;
             isJumping = false;
             ApplyLandingSquash();
         }
 
-        //Debug visualization
-        if(Debug.isDebugBuild)
+        if (Debug.isDebugBuild)
         {
             Color debugColor = isGrounded ? Color.green : Color.red;
             DrawDebugCube(boxCenter, boxSize, debugColor);
@@ -363,12 +358,9 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
 
     private void UpdateWallState()
     {
-        //Check both left and right walls
-        Vector2 boxCenter = (Vector2)transform.position +
-            new Vector2(0, data.wallCheckVerticalOffset);
-        Vector2 boxSize = new Vector2(data.wallCheckDistance,data.wallCheckHeight);
+        Vector2 boxCenter = (Vector2)transform.position + new Vector2(0, data.wallCheckVerticalOffset);
+        Vector2 boxSize = new Vector2(data.wallCheckDistance, data.wallCheckHeight);
 
-        //Check right wall
         int rightHitCount = Physics2D.BoxCast(
             boxCenter,
             boxSize,
@@ -378,7 +370,7 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
             wallHits,
             data.wallCheckDistance
         );
-        // Check left wall
+
         int leftHitCount = Physics2D.BoxCast(
             boxCenter,
             boxSize,
@@ -389,54 +381,41 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
             data.wallCheckDistance
         );
 
-        //Update WallSliding State
-
         bool wasWallSliding = isWallSliding;
         isWallSliding = false;
         wallDirectionX = 0;
 
-        //Only allow wall sliding if we are moving into the wall and falling
-        if(!isGrounded && rb.linearVelocity.y < 0)
+        if (!isGrounded && rb.linearVelocity.y < 0)
         {
-            if(rightHitCount > 0 && movementInput.x> 0)
+            if (rightHitCount > 0 && movementInput.x > 0)
             {
                 isWallSliding = true;
                 wallDirectionX = 1;
             }
-            else if(leftHitCount > 0 && movementInput.x < 0)
+            else if (leftHitCount > 0 && movementInput.x < 0)
             {
                 isWallSliding = true;
                 wallDirectionX = -1;
             }
         }
 
-        //Apply wall slide velocity
-        if(wasWallSliding)
+        if (isWallSliding)
         {
             rb.linearVelocity = new Vector2(rb.linearVelocity.x, -data.wallSlideSpeed);
         }
 
-        // Debug visualization
         if (Debug.isDebugBuild)
         {
-            Color rightDebugColor = rightHitCount > 0 ? Color.green : Color.red;
-            Color leftDebugColor = leftHitCount > 0 ? Color.green : Color.red;
-
-            DrawDebugCube(
-                boxCenter + Vector2.right * data.wallCheckDistance,
-                boxSize,
-                rightDebugColor
-            );
-            DrawDebugCube(
-                boxCenter + Vector2.left * data.wallCheckDistance,
-                boxSize,
-                leftDebugColor
-            );
+            DrawDebugCube(boxCenter + Vector2.right * data.wallCheckDistance, boxSize,
+                rightHitCount > 0 ? Color.green : Color.red);
+            DrawDebugCube(boxCenter + Vector2.left * data.wallCheckDistance, boxSize,
+                leftHitCount > 0 ? Color.green : Color.red);
         }
     }
+
     private void HandleCoyoteTime()
     {
-        if(!isGrounded && coyoteTimeLeft > 0)
+        if (!isGrounded && coyoteTimeLeft > 0)
         {
             coyoteTimeLeft -= Time.fixedDeltaTime;
         }
@@ -444,58 +423,77 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
 
     private void HandleJumpBuffer()
     {
-        if(jumpBufferTimeLeft > 0)
+        if (jumpBufferTimeLeft > 0)
         {
             jumpBufferTimeLeft -= Time.fixedDeltaTime;
-            if((isGrounded || isWallSliding) && jumpBufferTimeLeft > 0)
+            if ((isGrounded || isWallSliding) && jumpBufferTimeLeft > 0)
             {
                 jumpBufferTimeLeft = 0;
                 TryJump();
             }
         }
     }
-
     #endregion
 
-    #region Visual Effects
+    #region Efectos Visuales
+    private void UpdateAnimationState()
+    {
+        animationState.IsGrounded = IsGrounded;
+        animationState.IsJumping = IsJumping;
+        animationState.IsFalling = IsFalling;
+        animationState.IsWallSliding = IsWallSliding;
+        animationState.IsDashing = IsDashing;
+        animationState.MovementSpeed = MovementSpeed;
+        animationState.MovementDirection = MovementDirection;
+
+        animatorManager.UpdateAnimationState(animationState);
+    }
+
     private void ApplyJumpSquash()
     {
-        // Apply jump stretch effect
+        // Aplicar efecto de estiramiento al saltar
         Vector3 newScale = playerTransform.localScale;
         newScale.y *= (1 + data.jumpStretchAmount);
         newScale.x *= (1 - data.jumpStretchAmount * 0.5f);
         playerTransform.localScale = newScale;
 
-        // Reset scale after duration
+        // Restaurar la escala después de la duración especificada
         Invoke(nameof(ResetScale), data.squashStretchDuration);
     }
 
     private void ApplyLandingSquash()
     {
-        // Apply landing squash effect
+        // Aplicar efecto de aplastamiento al aterrizar
         Vector3 newScale = playerTransform.localScale;
         newScale.y *= (1 - data.landSquashAmount);
         newScale.x *= (1 + data.landSquashAmount * 0.5f);
         playerTransform.localScale = newScale;
 
-        // Reset scale after duration
+        // Restaurar la escala después de la duración especificada
         Invoke(nameof(ResetScale), data.squashStretchDuration);
     }
 
     private void ApplyDashEffects()
     {
-        // Implementation for dash effects (particles, trails, etc.)
+        // Aquí se pueden implementar efectos visuales adicionales para el dash
+        // Por ejemplo:
+        // - Sistema de partículas
+        // - Trail renderer
+        // - Efectos de post-procesado temporales
+        // - Efectos de sonido
     }
 
     private void ResetScale()
     {
+        // Restaurar la escala original del personaje
         playerTransform.localScale = Vector3.one;
     }
     #endregion
 
-    #region Debug Helpers
+    #region Utilidades de Debug
     private static void DrawDebugCube(Vector2 position, Vector2 size, Color color)
     {
+        // Calcular las esquinas del cubo para visualización en el editor
         Vector2 halfSize = size * 0.5f;
 
         Vector2 topLeft = position + new Vector2(-halfSize.x, halfSize.y);
@@ -503,12 +501,11 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
         Vector2 bottomRight = position + new Vector2(halfSize.x, -halfSize.y);
         Vector2 bottomLeft = position + new Vector2(-halfSize.x, -halfSize.y);
 
+        // Dibujar las líneas que forman el cubo
         Debug.DrawLine(topLeft, topRight, color);
         Debug.DrawLine(topRight, bottomRight, color);
         Debug.DrawLine(bottomRight, bottomLeft, color);
         Debug.DrawLine(bottomLeft, topLeft, color);
     }
     #endregion
-
-
 }
