@@ -1,7 +1,12 @@
 using UnityEngine;
 
+/// <summary>
+/// ScriptableObject que contiene toda la configuración de los clones.
+/// Permite ajustar los valores desde el editor de Unity y mantiene la configuración
+/// separada de la lógica (Principio de Responsabilidad Única).
+/// </summary>
 [CreateAssetMenu(fileName = "CloneData", menuName = "Crystal Caves/Player/CloneData")]
-public class CloneData : ScriptableObject
+public class CloneDataScriptableObject : ScriptableObject
 {
     [Header("Clone Properties")]
     [Tooltip("Duration in seconds that each clone will last")]
@@ -37,3 +42,4 @@ public class CloneData : ScriptableObject
     [Tooltip("Time before a clone can be teleported to after creation")]
     public float teleportDelay = 0.1f;
 }
+

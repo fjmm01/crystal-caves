@@ -31,8 +31,8 @@ MonoBehaviour:
   wallJumpControlCooldown: 0.2
   wallSlideSpeed: 3
   dashSpeed: 10
-  dashDuration: 0.15
-  dashCooldown: 2
+  dashDuration: 0.5
+  dashCooldown: 1
   preserveDashMomentum: 0
   dashEndVerticalMomentum: 0.5
   cornerCorrectionDistance: 0.3

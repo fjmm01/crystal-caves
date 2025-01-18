@@ -4,14 +4,12 @@ using UnityEngine;
 [RequireComponent(typeof(PlayerMovement))]
 public class PlayerCombatManager : MonoBehaviour,ICombatState,IDamageable
 {
-    [Header("Referencias")]
+    [Header("References")]
     [SerializeField] private CharacterData data;
     [SerializeField] private AnimatorManager animatorManager;
-    [SerializeField] private SpriteRenderer spriteRenderer;
 
     private PlayerMovement playerMovement;
     private PlayerStatsManager statsManager;
-    private IAttackValidator attackValidator;
     private bool isAttacking;
     private float attackCooldownTimer;
     private Vector2 lastMoveDirection;
@@ -20,24 +18,14 @@ public class PlayerCombatManager : MonoBehaviour,ICombatState,IDamageable
     private float knockbackTimer;
     private ParticleSystem damageParticles;
 
-    // Implementación de ICombatState
+    //Implementacion de ICombatState
     public bool IsAttacking => isAttacking;
     public string CurrentAttackType => GetCurrentAttackType();
 
     private void Awake()
     {
-        InitializeComponents();
-        attackValidator = new DefaultAttackValidator();
-    }
-    private void InitializeComponents()
-    {
         playerMovement = GetComponent<PlayerMovement>();
         statsManager = GetComponent<PlayerStatsManager>();
-
-        if (spriteRenderer == null)
-        {
-            spriteRenderer = GetComponentInChildren<SpriteRenderer>();
-        }
     }
     private void Start()
     {
@@ -82,34 +70,9 @@ public class PlayerCombatManager : MonoBehaviour,ICombatState,IDamageable
 
     public void HandleAttackInput(Vector2 moveDirection, bool attackPressed)
     {
-        if (!attackPressed || attackCooldownTimer > 0 || isAttacking)
+        if(attackPressed && attackCooldownTimer <= 0 && !isAttacking)
         {
-            return;
-        }
-
-        // Determinar la dirección del ataque
-        Vector2 attackDirection;
-        if (moveDirection.sqrMagnitude > 0.1f)
-        {
-            attackDirection = moveDirection.normalized;
-        }
-        else
-        {
-            // Usar la dirección a la que mira el personaje para ataques horizontales
-            attackDirection = new Vector2(spriteRenderer.flipX ? -1 : 1, 0);
-        }
-
-        // Crear los datos de validación
-        var validationData = new AttackValidationData(
-            attackDirection,
-            playerMovement.IsGrounded,
-            playerMovement.IsDashing
-        );
-
-        // Validar si podemos realizar el ataque
-        if (attackValidator.CanPerformAttack(validationData.GetAttackDirection(), playerMovement))
-        {
-            lastMoveDirection = attackDirection;
+            lastMoveDirection = moveDirection.normalized;
             PerformAttack();
         }
     }
@@ -128,53 +91,46 @@ public class PlayerCombatManager : MonoBehaviour,ICombatState,IDamageable
         isAttacking = true;
         attackCooldownTimer = data.attackCooldown;
 
+        //Determinar la direccion del ataque
         bool isVerticalAttack = Mathf.Abs(lastMoveDirection.y) > Mathf.Abs(lastMoveDirection.x);
+
+        //Crear hitbox segun la direccion
         Vector2 hitboxSize = isVerticalAttack ? data.verticalHitboxSize : data.horizontalHitboxSize;
         Vector2 hitboxOffset = CalculatehitboxOffset(isVerticalAttack);
 
-        // Detectar y procesar hits
+        //Detectar hits
         Collider2D[] hits = Physics2D.OverlapBoxAll(
             (Vector2)transform.position + hitboxOffset,
             hitboxSize,
             0f,
-            LayerMask.GetMask("Enemy")
-        );
+            LayerMask.GetMask("Enemy"));
 
-        foreach (Collider2D hit in hits)
+        //Procesar hits
+        foreach(Collider2D hit in hits)
         {
-            if (hit.TryGetComponent<IDamageable>(out IDamageable damageable))
+            if(hit.TryGetComponent<IDamageable>(out IDamageable damageable))
             {
-                ProcessHit(damageable, hit.transform.position, isVerticalAttack);
+                Vector2 knockbackDirection = CalculateKnockbackDirection(hit.transform.position, isVerticalAttack);
+                damageable.TakeDamage(new DamageData
+                {
+                    damage = data.attackDamage,
+                    knockbackForce = knockbackDirection * data.attackKnockbackForce,
+                    knockbackDuration = data.knockbackDuration
+                });
+
+                ApplyHitEffects();
             }
         }
-
+        //Reset del estado de ataque
         Invoke(nameof(EndAttack), data.attackDuration);
     }
 
-    private void ProcessHit(IDamageable damageable, Vector2 targetPosition, bool isVerticalAttack)
-    {
-        Vector2 knockbackDirection = CalculateKnockbackDirection(targetPosition, isVerticalAttack);
-        damageable.TakeDamage(new DamageData
-        {
-            damage = data.attackDamage,
-            knockbackForce = knockbackDirection * data.attackKnockbackForce,
-            knockbackDuration = data.knockbackDuration
-        });
-
-        ApplyHitEffects();
-    }
     private Vector2 CalculatehitboxOffset(bool isVerticalAttack)
     {
         if(isVerticalAttack)
         {
             return new Vector2(0,lastMoveDirection.y * data.hitboxOffset);
         }
-
-        // Para ataques horizontales, usamos la dirección del sprite si no hay input de movimiento
-        float horizontalDirection = lastMoveDirection.x != 0 ?
-            lastMoveDirection.x :
-            (spriteRenderer.flipX ? -1 : 1);
-
         return new Vector2(lastMoveDirection.x * data.hitboxOffset, 0);
     }
 
@@ -183,11 +139,6 @@ public class PlayerCombatManager : MonoBehaviour,ICombatState,IDamageable
         if(isVerticalAttack)
         {
             return new Vector2(0, lastMoveDirection.y).normalized;
-        }
-        // Para knockback horizontal, usamos la dirección del sprite si no hay input de movimiento
-        if (lastMoveDirection.x == 0)
-        {
-            return new Vector2(spriteRenderer.flipX ? -1 : 1, 0);
         }
         return (targetPosition - (Vector2)transform.position).normalized;
     }
@@ -214,11 +165,13 @@ public class PlayerCombatManager : MonoBehaviour,ICombatState,IDamageable
     private string GetCurrentAttackType()
     {
         if (!isAttacking) return "None";
-
-        var direction = new AttackValidationData(lastMoveDirection, playerMovement.IsGrounded, playerMovement.IsDashing)
-            .GetAttackDirection();
-
-        return direction.ToString();
+        
+        bool isVerticalAttack = Mathf.Abs(lastMoveDirection.y) > Mathf.Abs(lastMoveDirection.x);
+        if (isVerticalAttack)
+        {
+            return lastMoveDirection.y > 0 ? "Up" : "Down";
+        }
+        return "Horizontal";
     }
 
     private void OnDrawGizmos()
@@ -235,13 +188,16 @@ public class PlayerCombatManager : MonoBehaviour,ICombatState,IDamageable
 
     public void TakeDamage(DamageData damageData)
     {
+        //Aplicar el daño al sistema de salud
         statsManager.Health.TakeDamage(damageData);
 
-        if (!isKnockedBack && damageData.knockbackForce != Vector2.zero)
+        //Aplicar knockback
+        if(!isKnockedBack && damageData.knockbackForce != Vector2.zero)
         {
             ApplyKnockback(damageData.knockbackForce, damageData.knockbackDuration);
         }
 
+        //Efectos visuales de daño
         PlayDamageEffects();
     }
 
@@ -286,45 +242,4 @@ public struct DamageData
     public int damage;
     public Vector2 knockbackForce;
     public float knockbackDuration;
-}
-// Enum que define las posibles direcciones de ataque
-public enum AttackDirection
-{
-    None,       // No hay ataque activo
-    Horizontal, // Ataque lateral (izquierda o derecha)
-    Up,         // Ataque hacia arriba
-    Down        // Ataque hacia abajo
-}
-
-public readonly struct AttackValidationData
-{
-    // Propiedades de solo lectura para garantizar inmutabilidad
-    public readonly Vector2 InputDirection { get; }
-    public readonly bool IsGrounded { get; }
-    public readonly bool IsDashing { get; }
-
-    public AttackValidationData(Vector2 inputDirection, bool isGrounded, bool isDashing)
-    {
-        InputDirection = inputDirection;
-        IsGrounded = isGrounded;
-        IsDashing = isDashing;
-    }
-
-    // Método helper para determinar la dirección del ataque basado en el input
-    public AttackDirection GetAttackDirection()
-    {
-        // Si no hay input significativo, asumimos ataque horizontal
-        if (InputDirection.sqrMagnitude < 0.1f)
-        {
-            return AttackDirection.Horizontal;
-        }
-
-        // Determinar si el ataque es vertical u horizontal basado en el componente mayor
-        if (Mathf.Abs(InputDirection.y) > Mathf.Abs(InputDirection.x))
-        {
-            return InputDirection.y > 0 ? AttackDirection.Up : AttackDirection.Down;
-        }
-
-        return AttackDirection.Horizontal;
-    }
 }

@@ -1313,7 +1313,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 1114265761519025723, guid: 019e7743d6b033b46a330d109f76d50b, type: 3}
       propertyPath: m_LocalPosition.y
-      value: -0.666
+      value: -0.65
       objectReference: {fileID: 0}
     - target: {fileID: 1815375974275146473, guid: 019e7743d6b033b46a330d109f76d50b, type: 3}
       propertyPath: m_Size.y
@@ -1416,6 +1416,9 @@ MonoBehaviour:
   cloneManager: {fileID: 2172878571963810801}
   inputManager: {fileID: 510140594}
   playerMovement: {fileID: 510140595}
+  teleportCooldown: 0.2
+  maxTeleportDistance: 10
+  teleportEffect: {fileID: 0}
 --- !u!114 &2172878571963810801
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1432,7 +1435,6 @@ MonoBehaviour:
   clonePrefab: {fileID: 488592080306531977, guid: 6dba7af0973d4a246a0092b1ff4fec75, type: 3}
   statsManager: {fileID: 2172878571963810799}
   bridgeSystem: {fileID: 718712182}
-  activeClones: []
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
