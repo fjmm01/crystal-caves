@@ -42,7 +42,7 @@ public class PlayerManager : MonoBehaviour
         }
 
         // Handle jump
-        if (inputManager.JumpInput)
+        if (inputManager.JumpInput && !inputManager.NeedNewJumpInput)
         {
             playerMovement.HandleJumpInput(true);
             inputManager.NeedNewJumpInput = true;
@@ -53,14 +53,14 @@ public class PlayerManager : MonoBehaviour
         }
 
         // Handle dash
-        if (inputManager.DashInput)
+        if (inputManager.DashInput && !inputManager.NeedNewDashInput)
         {
             playerMovement.HandleDashInput(true);
             inputManager.NeedNewDashInput = true;
         }
 
         //Handle Attack
-        if(inputManager.AttackInput)
+        if(inputManager.AttackInput && !inputManager.NeedNewAttackInput)
         {
             playerCombatManager.HandleAttackInput(inputManager.MoveInput, true);
             inputManager.NeedNewAttackInput = true;

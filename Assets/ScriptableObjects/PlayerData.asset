@@ -31,8 +31,8 @@ MonoBehaviour:
   wallJumpControlCooldown: 0.2
   wallSlideSpeed: 3
   dashSpeed: 10
-  dashDuration: 0.15
-  dashCooldown: 2
+  dashDuration: 0.5
+  dashCooldown: 1
   preserveDashMomentum: 0
   dashEndVerticalMomentum: 0.5
   cornerCorrectionDistance: 0.3
@@ -57,3 +57,14 @@ MonoBehaviour:
   wallCheckDistance: 0.3
   wallCheckHeight: 1
   wallCheckVerticalOffset: 0
+  attackDuration: 0.25
+  attackCooldown: 0.2
+  attackDamage: 1
+  attackKnockbackForce: 8
+  knockbackDuration: 0.2
+  horizontalHitboxSize: {x: 1.5, y: 1}
+  verticalHitboxSize: {x: 1, y: 1.5}
+  hitboxOffset: 1
+  hitStopDuration: 0.1
+  screenShakeIntensity: 0.1
+  screenShakeDuration: 0.1

@@ -36,6 +36,25 @@ public class LightBridgeSystem : MonoBehaviour
     {
         activeBridges.Clear();
 
+        // Si no hay clones activos o solo hay uno, desactivar el LineRenderer
+        if (activeClones == null || activeClones.Count < 2)
+        {
+            if (bridgeRenderer != null)
+            {
+                bridgeRenderer.positionCount = 0;
+            }
+            return;
+        }
+
+        // Calcular el número total de posibles conexiones
+        int totalPossibleConnections = (activeClones.Count * (activeClones.Count - 1)) / 2;
+        if (bridgeRenderer != null)
+        {
+            bridgeRenderer.positionCount = totalPossibleConnections * 2; // Cada conexión necesita 2 puntos
+        }
+
+        int currentPositionIndex = 0;
+
         // Verificar todas las posibles conexiones entre clones
         for (int i = 0; i < activeClones.Count; i++)
         {
@@ -45,20 +64,27 @@ public class LightBridgeSystem : MonoBehaviour
                 if (distance <= maxDistance)
                 {
                     activeBridges.Add((activeClones[i], activeClones[j]));
-                    CreateBridge(activeClones[i].Position, activeClones[j].Position);
+                    CreateBridge(activeClones[i].Position, activeClones[j].Position, ref currentPositionIndex);
                 }
             }
         }
+
+        // Si el número real de conexiones es menor que el total posible,
+        // ajustar el positionCount al número real
+        if (bridgeRenderer != null && currentPositionIndex < bridgeRenderer.positionCount)
+        {
+            bridgeRenderer.positionCount = currentPositionIndex;
+        }
     }
 
-    private void CreateBridge(Vector2 start, Vector2 end)
+    private void CreateBridge(Vector2 start, Vector2 end, ref int positionIndex)
     {
         if (bridgeRenderer == null) return;
 
-        // Configurar el puente visual
-        bridgeRenderer.positionCount = 2;
-        bridgeRenderer.SetPosition(0, start);
-        bridgeRenderer.SetPosition(1, end);
+        // Configurar el puente visual usando el índice actual
+        bridgeRenderer.SetPosition(positionIndex, start);
+        bridgeRenderer.SetPosition(positionIndex + 1, end);
+        positionIndex += 2; // Incrementar el índice para la siguiente conexión
     }
 
     /// <summary>
@@ -92,4 +118,4 @@ public class LightBridgeSystem : MonoBehaviour
             bridgeRenderer.positionCount = 0;
         }
     }
-}       
+}

@@ -1,16 +1,19 @@
+﻿using System.Collections;
 using System.Xml.Serialization;
+using Unity.VisualScripting;
 using UnityEditor.Animations;
 using UnityEngine;
 [RequireComponent (typeof(Rigidbody2D))]
 public class PlayerMovement : MonoBehaviour,IAnimationState
 {
-<<<<<<< Updated upstream
+
     [Header("References")]
-    [SerializeField] Rigidbody2D rb;
-=======
-    [Header("Referencias")]
     [SerializeField] public Rigidbody2D rb;
->>>>>>> Stashed changes
+    [SerializeField] SpriteRenderer spriteRenderer;
+
+    [Header("Referencias")]
+    
+
     [SerializeField] public CharacterData data;
     [SerializeField] AnimatorManager animatorManager;
     private PlayerAnimationState animationState = new PlayerAnimationState();
@@ -22,6 +25,7 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
     private bool isDashing;
     private bool isWallSliding;
     private bool canDoubleJump = true;
+    private bool canMove;
     #endregion
 
     #region Movement Variables
@@ -33,6 +37,11 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
     private float wallJumpCoolDownLeft;
     private float wallDirectionX;
     private Vector2 movementInput;
+    private float originalGravityScale;
+    private float postDashSpeed = 0f;
+    private bool isInPostDashState = false;
+    private float postDashTimer = 0f;
+    private const float POST_DASH_DURATION = 0.2f;
     #endregion
 
     #region Physics Check Variables
@@ -58,11 +67,18 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
     {
         InitializeComponents();
         InitializeCollisionFilters();
+        originalGravityScale = rb.gravityScale;
     }
     private void FixedUpdate()
     {
         UpdatePhysicsState();
+        ApplyMovement();
 
+        // Actualizar el dash si está activo
+        if (isDashing)
+        {
+            HandleDashMovement();
+        }
         if (dashCooldownLeft > 0)
         {
             dashCooldownLeft -= Time.fixedDeltaTime;
@@ -84,6 +100,7 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
     private void Update()
     {
         UpdateAnimationState();
+        Debug.Log(isDashing);
     }
 
     #region Initialization
@@ -92,6 +109,7 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
         playerTransform = transform;
         if (!rb) rb = GetComponent<Rigidbody2D>();
         if(!animatorManager) animatorManager = GetComponent<AnimatorManager>();
+        if(!spriteRenderer) spriteRenderer = GetComponentInChildren<SpriteRenderer>();
 
     }
 
@@ -116,22 +134,30 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
     #region Public Methods
     public void HandleMovement(Vector2 input)
     {
-        movementInput = input;
-        ApplyMovement();
+         movementInput = input;
+         
     }
+
+    // Variable para rastrear si ya procesamos este salto
+    private bool jumpProcessed = false;
 
     public void HandleJumpInput(bool jumpPressed)
     {
-        if(jumpPressed)
+        if (jumpPressed && !jumpProcessed)
         {
+            jumpProcessed = true;
             jumpBufferTimeLeft = data.jumpBufferTime;
             TryJump();
         }
-        else if(rb.linearVelocity.y > 0 && isJumping)
+        else if (!jumpPressed)
         {
-            //Early jump release for variable height
-            rb.linearVelocity = new Vector2(rb.linearVelocity.x,rb.linearVelocity.y * data.minJumpMultiplier);
-            isJumping = false;
+            jumpProcessed = false;
+            if (rb.linearVelocity.y > 0 && isJumping)
+            {
+                //Early jump release for variable height
+                rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y * data.minJumpMultiplier);
+                isJumping = false;
+            }
         }
     }
 
@@ -139,6 +165,7 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
     {
         if(dashPressed && dashCooldownLeft <= 0 && !isDashing)
         {
+            Debug.Log("Entro en el if que llama a StartDash");
             StartDash();
         }
     }
@@ -152,7 +179,15 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
             HandleDashMovement();
             return;
         }
-        if(wallJumpCoolDownLeft > 0)
+        // Manejo del estado post-dash
+        if (isInPostDashState)
+        {
+            HandlePostDashMovement();
+            return;
+        }
+        
+
+        if (wallJumpCoolDownLeft > 0)
         {
             wallJumpCoolDownLeft -= Time.fixedDeltaTime;
             return;
@@ -198,7 +233,8 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
         rb.AddForce(Vector2.right * moveForce);
 
         // Limitar velocidad horizontal
-        float clampedSpeedX = Mathf.Clamp(rb.linearVelocity.x, -data.maxSpeed, data.maxSpeed);
+        float maxSpeedMultiplier = isDashing ? 1f : 0.95f;
+        float clampedSpeedX = Mathf.Clamp(rb.linearVelocity.x, -data.maxSpeed * maxSpeedMultiplier, data.maxSpeed * maxSpeedMultiplier);
         rb.linearVelocity = new Vector2(clampedSpeedX, rb.linearVelocity.y);
 
 
@@ -208,6 +244,7 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
 
     private void UpdateGravityScale()
     {
+        if (isDashing) return;
         // Si estamos cayendo
         if (rb.linearVelocity.y < 0)
         {
@@ -226,7 +263,7 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
         // En otros casos
         else
         {
-            rb.gravityScale = 1f;
+            rb.gravityScale = originalGravityScale;
         }
 
         // Limitar la velocidad de ca�da
@@ -276,15 +313,53 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
         PerformJump(data.jumpForce * 0.8f);
     }
 
+    private void HandlePostDashMovement()
+    {
+        postDashTimer -= Time.fixedDeltaTime;
+
+        if (postDashTimer <= 0)
+        {
+            isInPostDashState = false;
+            return;
+        }
+
+        // Permitir cierto control durante el estado post-dash
+        float targetSpeed = movementInput.x * data.maxSpeed;
+        float currentSpeed = rb.linearVelocity.x;
+
+        // Interpolar entre la velocidad post-dash y la velocidad objetivo
+        float t = 1 - (postDashTimer / POST_DASH_DURATION);
+        float finalSpeed = Mathf.Lerp(postDashSpeed, targetSpeed, t);
+
+        rb.linearVelocity = new Vector2(finalSpeed, rb.linearVelocity.y);
+    }
     private void StartDash()
     {
+        if (isDashing) return;
+
         isDashing = true;
         dashTimeLeft = data.dashDuration;
         dashCooldownLeft = data.dashCooldown;
-        
-        //Set dash velocity
-        float dashDirection = movementInput.x != 0 ? Mathf.Sign(movementInput.x) : Mathf.Sign(playerTransform.localScale.x);
+
+        // Determinar la dirección del dash
+        float dashDirection;
+        if (Mathf.Abs(movementInput.x) > 0.1f)
+        {
+            dashDirection = Mathf.Sign(movementInput.x);
+        }
+        else
+        {
+            dashDirection = spriteRenderer.flipX ? -1 : 1;
+        }
+
+        // Desactivar gravedad durante el dash
+        rb.gravityScale = 0;
+
+        // Aplicar velocidad del dash directamente
         rb.linearVelocity = new Vector2(dashDirection * data.dashSpeed, 0);
+
+        // Limpiar fuerzas residuales
+        rb.angularVelocity = 0;
 
         // Optional: Apply dash effects
         ApplyDashEffects();
@@ -292,27 +367,49 @@ public class PlayerMovement : MonoBehaviour,IAnimationState
 
     private void HandleDashMovement()
     {
+        // Si no estamos en dash, no deberíamos estar aquí
+        if (!isDashing) return;
+
+        // Actualizar el tiempo restante del dash
         dashTimeLeft -= Time.fixedDeltaTime;
 
-        if (dashTimeLeft <= 0)
+        if (dashTimeLeft > 0)
+        {
+            // Mantener velocidad constante durante el dash
+            float currentDashDirection = Mathf.Sign(rb.linearVelocity.x);
+            rb.linearVelocity = new Vector2(currentDashDirection * data.dashSpeed, 0);
+        }
+        else
         {
             EndDash();
         }
     }
     private void EndDash()
     {
+        if (!isDashing) return;
+
         isDashing = false;
-        if (data.preserveDashMomentum)
-        {
-            rb.linearVelocity = new Vector2(
-                rb.linearVelocity.x,
-                rb.linearVelocity.y * data.dashEndVerticalMomentum
-            );
-        }
-        else
-        {
-            rb.linearVelocity = Vector2.zero;
-        }
+        isInPostDashState = true;
+        postDashTimer = POST_DASH_DURATION;
+
+        // Restaurar gravedad
+        rb.gravityScale = originalGravityScale;
+
+        // Establecer una velocidad consistente al salir del dash
+        float currentDirection = Mathf.Sign(rb.linearVelocity.x);
+        postDashSpeed = currentDirection * data.maxSpeed * 0.7f;
+        rb.linearVelocity = new Vector2(postDashSpeed, rb.linearVelocity.y);
+
+        // Limpiar cualquier fuerza residual
+        rb.angularVelocity = 0f;
+    }
+
+    private  IEnumerator EnableMovementAfterDelay(float delay)
+    {
+        // Deshabilitamos temporalmente el input de movimiento
+        canMove = false;
+        yield return new WaitForSeconds(delay);
+        canMove = true;
     }
     #endregion
 

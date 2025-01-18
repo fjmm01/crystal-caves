@@ -25,6 +25,7 @@ public class PlayerCombatManager : MonoBehaviour,ICombatState,IDamageable
     private void Awake()
     {
         playerMovement = GetComponent<PlayerMovement>();
+        statsManager = GetComponent<PlayerStatsManager>();
     }
     private void Start()
     {
