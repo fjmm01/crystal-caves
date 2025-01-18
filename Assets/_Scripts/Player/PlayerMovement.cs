@@ -4,8 +4,13 @@ using UnityEngine;
 [RequireComponent (typeof(Rigidbody2D))]
 public class PlayerMovement : MonoBehaviour,IAnimationState
 {
+<<<<<<< Updated upstream
     [Header("References")]
     [SerializeField] Rigidbody2D rb;
+=======
+    [Header("Referencias")]
+    [SerializeField] public Rigidbody2D rb;
+>>>>>>> Stashed changes
     [SerializeField] public CharacterData data;
     [SerializeField] AnimatorManager animatorManager;
     private PlayerAnimationState animationState = new PlayerAnimationState();
